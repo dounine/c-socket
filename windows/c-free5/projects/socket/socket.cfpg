@@ -1,0 +1,5 @@
+<Projects version="2.0">
+	<Project active="1">socket.cfp</Project>
+	<File active="0">main.cpp</File>
+	<File active="1">server.cpp</File>
+</Projects>
