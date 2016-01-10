@@ -23,21 +23,6 @@ using namespace std;
 long long threadCount = 0;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int Random(int m,int n){
-	int pos,dis;
-	if(m==n){
-		return m;
-	}else if(m>n){
-		pos = n;
-		dis = m-n+1;
-		return rand()%dis+pos;
-	}else{
-		pos = m;
-		dis = n -m+1;
-		return rand()%dis+pos;
-	}
-}
-
 static bool port_is_open(string ip, int port){
 
     struct sockaddr_in address;  /* the libc network address data structure */
