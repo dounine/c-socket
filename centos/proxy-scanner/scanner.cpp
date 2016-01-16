@@ -96,7 +96,7 @@ int main(int argc, char **argv){
 			ostringstream ip;
 			gettimeofday(&tv,NULL);
 			srand(tv.tv_usec);
-			ip1 = 1+(int) (255.0*rand()/(RAND_MAX+1.0));
+			ip1 = 1+(int) (200.0*rand()/(RAND_MAX+1.0));
 			ip2 = 1+(int) (255.0*rand()/(RAND_MAX+1.0));
 			ip3 = 1+(int) (255.0*rand()/(RAND_MAX+1.0));
 			ip4 = 1+(int) (255.0*rand()/(RAND_MAX+1.0));
