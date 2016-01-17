@@ -18,13 +18,17 @@
 #include <netinet/tcp.h>	//Provides declarations for tcp header
 #include <netinet/ip.h>	//Provides declarations for ip header
 using namespace std;
+long long threadCount = 0;//限制开启线程数
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
-#define SYN_TIMEOUT 1
+#define SYN_TIMEOUT 0 //syn发送时间
+#define SYN_PORT 80   //扫描端口
 void task();
 bool process_packet(unsigned char* , int);
 unsigned short csum(unsigned short * , int );
 char * hostname_to_ip(char * );
 void get_local_ip (char *);
+void montage(const string&);
 
 struct pseudo_header    //needed for checksum calculation
 {
@@ -40,13 +44,28 @@ struct pseudo_header    //needed for checksum calculation
 struct in_addr dest_ip;
 
 int main(int argc, char *argv[]){
-	if(argc<2){
-		cout<<"请输入扫描的IP或域名"<<endl;
-		return 1;
+
+	string host = "101.200.198.";
+	
+	thread *tt = new thread(task);
+	for(int i =0;i<255;i++){
+		sleep(1);
+		ostringstream ip;
+		ip<<host<<i;
+		//pthread_mutex_lock(&mutex);
+	       	//++threadCount;
+	       	//pthread_mutex_unlock(&mutex);
+	   	new thread(montage,ip.str());
+		//montage(ip.str());
 	}
 	
+	tt->join();
+	return 0;
+}
+int sock = socket (AF_INET, SOCK_RAW , IPPROTO_TCP);
+void montage(const string& h){
 	//创建socket套接字
-	int s = socket (AF_INET, SOCK_RAW , IPPROTO_TCP);
+	
 		
 	//Datagram to represent the packet
 	char datagram[4096];	
@@ -59,7 +78,7 @@ int main(int argc, char *argv[]){
 	
 	struct sockaddr_in  dest;
 	struct pseudo_header psh;
-	char *target = argv[1];
+	char *target = (char*)h.c_str();
 	
 	if( inet_addr( target ) != -1){
 		dest_ip.s_addr = inet_addr( target );
@@ -71,7 +90,6 @@ int main(int argc, char *argv[]){
 			dest_ip.s_addr = inet_addr( hostname_to_ip(target) );
 		}else{
 			cout<<"不能解析域名 : "<<target<<endl;
-			return 1;
 		}
 	}
 	
@@ -79,7 +97,7 @@ int main(int argc, char *argv[]){
 	char source_ip[20];
 	get_local_ip( source_ip );
 	
-	cout<<"本地IP地址:"<<source_ip<<endl;
+	//cout<<"本地IP地址:"<<source_ip<<endl;
 	
 	memset (datagram, 0, 4096);	/* zero out the buffer */
 	
@@ -114,22 +132,20 @@ int main(int argc, char *argv[]){
 	tcph->check = 0;
 	tcph->urg_ptr = 0;
 	
-	int one = 1;
+	struct timeval tv;
+	tv.tv_sec = 1;
+	tv.tv_usec = 0;
 	
-	setsockopt (s, IPPROTO_IP, IP_HDRINCL, &one, sizeof (one));
-	
-	cout<<"启动嗅探线程..."<<endl;
+	setsockopt (sock, IPPROTO_IP, IP_HDRINCL, &tv, sizeof (tv));
 
-	thread *tt = new thread(task);
-
-	cout<<"开始发送syn pakcage"<<endl;
+	//cout<<"开始发送syn pakcage"<<endl;
 	
 	
 	dest.sin_family = AF_INET;
 	dest.sin_addr.s_addr = dest_ip.s_addr;
 	
 	
-	int port=80;
+	int port=SYN_PORT;
 	tcph->dest = htons ( port );
 	tcph->check = 0;
 	
@@ -144,13 +160,9 @@ int main(int argc, char *argv[]){
 	tcph->check = csum( (unsigned short*) &psh , sizeof (struct pseudo_header));
 	
 	//Send the packet
-	if ( sendto (s, datagram , sizeof(struct iphdr) + sizeof(struct tcphdr) , 0 , (struct sockaddr *) &dest, sizeof (dest)) < 0){
-		cout<<"发送syn package失败"<<endl;
+	if ( sendto (sock, datagram , sizeof(struct iphdr) + sizeof(struct tcphdr) , 0 , (struct sockaddr *) &dest, sizeof (dest)) < 0){
+		cout<<"发送syn package失败"<<strerror(errno)<<endl;
 	}
-	
-	tt->join();
-	
-	return 0;
 }
 
 /*
@@ -163,9 +175,9 @@ void task(){
         socklen_t saddr_size;
 	struct sockaddr saddr;
 	
-	unsigned char *buffer = (unsigned char *)malloc(100); //Its Big!
+	unsigned char *buffer = (unsigned char *)malloc(65536); //Its Big!
 	
-	cout<<"嗅探开始..."<<endl;
+	//cout<<"嗅探开始..."<<endl;
 	
 	//Create a raw socket that shall sniff
 	sock_raw = socket(AF_INET , SOCK_RAW , IPPROTO_TCP);
@@ -179,23 +191,40 @@ void task(){
 	setsockopt(sock_raw,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));//设置接收package超时
 	while(br){
 		//接收包
-		data_size = recvfrom(sock_raw , buffer , 100 , 0 , &saddr , &saddr_size);
+		data_size = recvfrom(sock_raw , buffer , 65536 , 0 , &saddr , &saddr_size);
 	
 		if(data_size < 0 ){
 			cout<<"获取PACKAGE失败"<<endl;
-			br = 0;
+			//br = 0;
+			//pthread_mutex_lock(&mutex);
+		       	//--threadCount;
+		       	//pthread_mutex_unlock(&mutex);
+			//close(sock_raw);
 		}else{
 			if(process_packet(buffer , data_size)){
-				br = 0;
+				//br = 0;
+				//pthread_mutex_lock(&mutex);
+			       	//--threadCount;
+			       	//pthread_mutex_unlock(&mutex);
+				//close(sock_raw);
 			}
 		}
 	}
-
-	free(buffer);
 	close(sock_raw);
-	cout<<"扫描完成"<<endl;
+	//cout<<"扫描完成"<<endl;
 }
 
+string uint_to_ip(unsigned int ip){
+    ostringstream ii;
+    ii<<((ip>>0)&0xFF);
+    ii<<".";
+    ii<<((ip>>8)&0xFF);
+    ii<<".";
+    ii<<((ip>>16)&0xFF);
+    ii<<".";
+    ii<<((ip>>24)&0xFF);
+    return ii.str();
+}
 bool process_packet(unsigned char* buffer, int size)
 {
 	//Get the IP Header part of this packet
@@ -216,7 +245,7 @@ bool process_packet(unsigned char* buffer, int size)
 		dest.sin_addr.s_addr = iph->daddr;
 		
 		if(tcph->syn == 1 && tcph->ack == 1 && source.sin_addr.s_addr == dest_ip.s_addr ){
-			cout<<"端口 "<<ntohs(tcph->source)<<" 打开 "<<endl;
+			cout<<uint_to_ip(iph->saddr)<<"端口 "<<ntohs(tcph->source)<<" open "<<endl;
 			return true;
 		}
 	}
