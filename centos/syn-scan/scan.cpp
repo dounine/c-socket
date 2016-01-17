@@ -49,7 +49,7 @@ int main(int argc, char *argv[]){
 	
 	thread *tt = new thread(task);
 	for(int i =0;i<255;i++){
-		sleep(1);
+		//sleep(1);
 		ostringstream ip;
 		ip<<host<<i;
 		//pthread_mutex_lock(&mutex);
@@ -62,11 +62,12 @@ int main(int argc, char *argv[]){
 	tt->join();
 	return 0;
 }
-int sock = socket (AF_INET, SOCK_RAW , IPPROTO_TCP);
+
 void montage(const string& h){
 	//创建socket套接字
 	
-		
+	int sock = socket (AF_INET, SOCK_RAW , IPPROTO_TCP);	
+	fcntl(sock, F_SETFL, O_NONBLOCK);
 	//Datagram to represent the packet
 	char datagram[4096];	
 	
@@ -79,19 +80,19 @@ void montage(const string& h){
 	struct sockaddr_in  dest;
 	struct pseudo_header psh;
 	char *target = (char*)h.c_str();
-	
-	if( inet_addr( target ) != -1){
-		dest_ip.s_addr = inet_addr( target );
-	}else{
-		char *ip = hostname_to_ip(target);
-		if(ip != NULL){
-			cout<<target<<" 解析-> "<<ip<<endl;
-			//转换域名为IP地址
-			dest_ip.s_addr = inet_addr( hostname_to_ip(target) );
-		}else{
-			cout<<"不能解析域名 : "<<target<<endl;
-		}
-	}
+	dest_ip.s_addr = inet_addr( target );
+	//if( inet_addr( target ) != -1){
+	//	dest_ip.s_addr = inet_addr( target );
+	//}else{
+	//	char *ip = hostname_to_ip(target);
+	//	if(ip != NULL){
+	//		cout<<target<<" 解析-> "<<ip<<endl;
+	//		//转换域名为IP地址
+	//		dest_ip.s_addr = inet_addr( hostname_to_ip(target) );
+	//	}else{
+	//		cout<<"不能解析域名 : "<<target<<endl;
+	//	}
+	//}
 	
 	int source_port = 43591;
 	char source_ip[20];
@@ -136,7 +137,7 @@ void montage(const string& h){
 	tv.tv_sec = 1;
 	tv.tv_usec = 0;
 	
-	setsockopt (sock, IPPROTO_IP, IP_HDRINCL, &tv, sizeof (tv));
+	setsockopt (sock, IPPROTO_IP, IP_HDRINCL, &tv, sizeof(tv));
 
 	//cout<<"开始发送syn pakcage"<<endl;
 	
@@ -158,11 +159,12 @@ void montage(const string& h){
 	memcpy(&psh.tcp , tcph , sizeof (struct tcphdr));
 	
 	tcph->check = csum( (unsigned short*) &psh , sizeof (struct pseudo_header));
-	
+
 	//Send the packet
 	if ( sendto (sock, datagram , sizeof(struct iphdr) + sizeof(struct tcphdr) , 0 , (struct sockaddr *) &dest, sizeof (dest)) < 0){
 		cout<<"发送syn package失败"<<strerror(errno)<<endl;
 	}
+	//close(sock);
 }
 
 /*
@@ -191,6 +193,7 @@ void task(){
 	setsockopt(sock_raw,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv));//设置接收package超时
 	while(br){
 		//接收包
+		sleep(0.1);
 		data_size = recvfrom(sock_raw , buffer , 65536 , 0 , &saddr , &saddr_size);
 	
 		if(data_size < 0 ){
